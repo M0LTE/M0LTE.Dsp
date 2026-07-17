@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/M0LTE.Dsp/M0LTE.Dsp.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/M0LTE.Dsp.Tests/M0LTE.Dsp.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageId>M0LTE.Dsp</PackageId>
+    <Title>M0LTE.Dsp — DSP primitives</Title>
+    <Description>Dependency-free digital-signal-processing primitives for .NET: an iterative in-place radix-2 complex FFT, windowed-sinc FIR filter design (low-pass / band-pass / root-raised-cosine), a streaming FIR filter, an anti-aliased FIR decimator and image-rejecting FIR upsampler, a waterfall-spectrum source, and an ITU-R SM.443 occupied-bandwidth meter. Extracted from the pdn-soundmodem packet-radio modem; used by amateur-radio SDR/modem work but general-purpose.</Description>
+    <PackageTags>dsp;fft;fir;signal-processing;sdr;decimator;resampling;amateur-radio;ham-radio</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>

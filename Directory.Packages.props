@@ -1,0 +1,19 @@
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Testing -->
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageVersion Include="AwesomeAssertions" Version="9.2.0" />
+
+    <!-- Public-API lock: renders the assembly's public surface to text for the
+         approval test in PublicApiTests.cs. -->
+    <PackageVersion Include="PublicApiGenerator" Version="11.4.5" />
+  </ItemGroup>
+
+</Project>

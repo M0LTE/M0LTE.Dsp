@@ -1,0 +1,73 @@
+name: publish
+
+# Cuts a release: on a version tag, gate on a green build + full test suite (including the
+# public-API lock), then pack and push to nuget.org and open a GitHub release. Nothing
+# publishes on an ordinary push — only when a v<MAJOR>.<MINOR>.<PATCH> tag is pushed, and
+# only if that tag matches <Version> in Directory.Build.props (see docs/versioning.md).
+#
+# Publishing uses nuget.org Trusted Publishing (OIDC): no long-lived API key is stored.
+# The NuGet/login action exchanges a short-lived GitHub OIDC token for a temporary API key,
+# matched against the trusted-publishing policy configured on nuget.org for this repo's
+# `publish.yml`. The nuget.org account username is read from the `NUGET_USER` repo variable.
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # mint the OIDC token for Trusted Publishing
+      contents: write   # create the GitHub release
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up .NET (from global.json)
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Verify tag matches <Version>
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(grep -oPm1 '(?<=<Version>)[^<]+' Directory.Build.props)"
+          echo "tag=$tag  <Version>=$version"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::Tag v$tag does not match <Version>$version in Directory.Build.props — bump the version in the same commit as the tag (docs/versioning.md)."
+            exit 1
+          fi
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build (warnings are errors)
+        run: dotnet build -c Release --no-restore
+
+      - name: Test (incl. public-API lock)
+        run: dotnet test -c Release --no-build --verbosity normal
+
+      - name: Pack
+        run: dotnet pack src/M0LTE.Dsp/M0LTE.Dsp.csproj -c Release --no-build -o artifacts
+
+      # Get a short-lived nuget.org API key via Trusted Publishing, immediately before push
+      # (the key is valid for ~1 hour). NUGET_USER is a repo variable = the nuget.org profile
+      # name (Settings ▸ Secrets and variables ▸ Actions ▸ Variables), not an email address.
+      - name: NuGet login (OIDC → temporary API key)
+        uses: NuGet/login@v1
+        id: nuget-login
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      - name: Push to nuget.org
+        run: |
+          set -euo pipefail
+          key='${{ steps.nuget-login.outputs.NUGET_API_KEY }}'
+          dotnet nuget push "artifacts/*.nupkg"  --api-key "$key" --source https://api.nuget.org/v3/index.json --skip-duplicate
+          dotnet nuget push "artifacts/*.snupkg" --api-key "$key" --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" artifacts/*.nupkg --title "$GITHUB_REF_NAME" --generate-notes

@@ -1,0 +1,47 @@
+namespace M0LTE.Dsp
+{
+    public sealed class Decimator
+    {
+        public Decimator(int inputRate, int factor, int taps = 96) { }
+        public int MaxOutput(int inputLength) { }
+        public int Process(System.ReadOnlySpan<float> input, System.Span<float> output) { }
+    }
+    public static class Fft
+    {
+        public static void Forward(System.Span<float> real, System.Span<float> imaginary) { }
+    }
+    public static class FilterDesign
+    {
+        public static float[] BandPass(double lowHz, double highHz, double sampleRate, int taps) { }
+        public static float[] LowPass(double cutoffHz, double sampleRate, int taps) { }
+        public static double RootRaisedCosine(double t, double beta) { }
+    }
+    public sealed class FirFilter
+    {
+        public FirFilter(float[] coefficients) { }
+        public float Next(float sample) { }
+    }
+    public static class OccupiedBandwidth
+    {
+        [return: System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "LowHz",
+                "HighHz",
+                "WidthHz",
+                "PeakHz"})]
+        public static System.ValueTuple<double, double, double, double> Measure(System.ReadOnlySpan<float> samples, int sampleRate, double fraction = 0.99, int fftSize = 4096) { }
+    }
+    public sealed class SpectrumSource
+    {
+        public SpectrumSource(int sampleRate, System.Action<System.ReadOnlyMemory<byte>> lineSink, int fftSize = 4096, float floorDb = -100, float rangeDb = 70) { }
+        public double BinWidthHz { get; }
+        public int LineLength { get; }
+        public int SampleRate { get; }
+        public void Process(System.ReadOnlySpan<float> samples) { }
+    }
+    public sealed class Upsampler
+    {
+        public Upsampler(int outputRate, int factor, int taps = 96) { }
+        public int OutputLength(int inputLength) { }
+        public void Process(System.ReadOnlySpan<float> input, System.Span<float> output) { }
+    }
+}

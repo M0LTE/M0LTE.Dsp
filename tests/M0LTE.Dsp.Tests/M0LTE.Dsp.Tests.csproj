@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/M0LTE.Dsp/M0LTE.Dsp.csproj" />
+  </ItemGroup>
+
+</Project>

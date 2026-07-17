@@ -1,0 +1,11 @@
+bin/
+obj/
+*.user
+.vs/
+.idea/
+TestResults/
+artifacts/
+*.nupkg
+*.snupkg
+# Public-API approval receipts (written on drift; the approved snapshot is committed).
+*.received.txt

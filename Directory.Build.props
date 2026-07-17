@@ -1,0 +1,30 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <!-- Package identity + SemVer. The public API is locked by an approval test
+       (tests/M0LTE.Dsp.Tests/PublicApiTests.cs); see docs/versioning.md for the
+       MAJOR/MINOR/PATCH policy that governs bumps to this Version. -->
+  <PropertyGroup>
+    <Version>0.1.0</Version>
+    <Authors>Tom Fanning M0LTE</Authors>
+    <Company>M0LTE</Company>
+    <Copyright>Copyright © 2026 Tom Fanning M0LTE</Copyright>
+    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/M0LTE/M0LTE.Dsp</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/M0LTE/M0LTE.Dsp</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+</Project>
