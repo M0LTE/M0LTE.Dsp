@@ -21,6 +21,11 @@ namespace M0LTE.Dsp
         public FirFilter(float[] coefficients) { }
         public float Next(float sample) { }
     }
+    public sealed class FrequencyShifter
+    {
+        public FrequencyShifter(int sampleRate, double shiftHz, int taps = 129) { }
+        public void Process(System.ReadOnlySpan<float> input, System.Span<float> output) { }
+    }
     public static class OccupiedBandwidth
     {
         [return: System.Runtime.CompilerServices.TupleElementNames(new string[] {
