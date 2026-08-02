@@ -19,6 +19,8 @@ copyleft obligation.
 | `FrequencyShifter.cs` | Analytic-signal (Hilbert) single-sideband frequency translator: a windowed-sinc Type III Hilbert FIR forms the analytic signal, mixed by an NCO with the real part taken. Textbook SSB up/down-conversion; independent implementation. |
 | `SpectrumSource.cs` | Hann-windowed FFT framing into dB-scaled waterfall bytes. Own implementation over `Fft`. |
 | `OccupiedBandwidth.cs` | The ITU-R SM.443 occupied-bandwidth definition (power fraction with equal tails), estimated by Welch averaging (Hann, 50 % overlap). Own implementation of a published measurement definition. |
+| `SsbDemodulator.cs` | Textbook SSB demodulation from complex baseband: NCO shift to put the suppressed carrier at DC, a complex bandpass keeping one sideband, the real part, then decimation. Independent implementation; the readable reference the streaming form is tested against. |
+| `StreamingSsbDemodulator.cs` | The same linear filter rearranged for constant memory: the SSB bandpass and the anti-alias low-pass collapsed into one complex kernel evaluated only at output instants (valid because the low-pass is real, so `g * Re{y} = Re{g * y}`). Own work; pinned sample-for-sample against the reference by test. |
 
 No GPL-licensed source code (e.g. QtSoundModem, Dire Wolf) is copied here — only standard
 algorithms and published measurement definitions. The modem, framing and codec layers of

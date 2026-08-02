@@ -35,6 +35,11 @@ namespace M0LTE.Dsp
                 "PeakHz"})]
         public static System.ValueTuple<double, double, double, double> Measure(System.ReadOnlySpan<float> samples, int sampleRate, double fraction = 0.99, int fftSize = 4096) { }
     }
+    public enum Sideband
+    {
+        Upper = 0,
+        Lower = 1,
+    }
     public sealed class SpectrumSource
     {
         public SpectrumSource(int sampleRate, System.Action<System.ReadOnlyMemory<byte>> lineSink, int fftSize = 4096, float floorDb = -100, float rangeDb = 70) { }
@@ -42,6 +47,37 @@ namespace M0LTE.Dsp
         public int LineLength { get; }
         public int SampleRate { get; }
         public void Process(System.ReadOnlySpan<float> samples) { }
+    }
+    public sealed class SsbDemodulator
+    {
+        public SsbDemodulator(M0LTE.Dsp.SsbDemodulatorOptions? options = null) { }
+        public float[] Convert(System.ReadOnlySpan<short> interleaved) { }
+        public float[] Convert(System.ReadOnlySpan<double> iIn, System.ReadOnlySpan<double> qIn) { }
+    }
+    public sealed class SsbDemodulatorOptions
+    {
+        public SsbDemodulatorOptions() { }
+        public int BandpassTaps { get; init; }
+        public double DialHz { get; init; }
+        public int InputRate { get; init; }
+        public float NormalisePeak { get; init; }
+        public int OutputRate { get; init; }
+        public M0LTE.Dsp.Sideband Sideband { get; init; }
+        public double SsbHighHz { get; init; }
+        public double SsbLowHz { get; init; }
+    }
+    public sealed class StreamingSsbDemodulator
+    {
+        public StreamingSsbDemodulator(M0LTE.Dsp.SsbDemodulatorOptions? options = null) { }
+        public int InputRate { get; }
+        public int LookAheadSamples { get; }
+        public int MaxFlushOutput { get; }
+        public long OutputCount { get; }
+        public int OutputRate { get; }
+        public int Flush(System.Span<float> output) { }
+        public int MaxOutputFor(int inputFrames) { }
+        public int Process(System.ReadOnlySpan<short> interleaved, System.Span<float> output) { }
+        public int Process(System.ReadOnlySpan<double> i, System.ReadOnlySpan<double> q, System.Span<float> output) { }
     }
     public sealed class Upsampler
     {

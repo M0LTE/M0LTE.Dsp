@@ -11,8 +11,11 @@ here is radio-specific — it's general-purpose DSP (standard-API / textbook bui
 | `FirFilter` | Streaming FIR filter — per-sample MAC over a circular history. |
 | `Decimator` | Anti-aliased FIR decimator (computes the FIR only at output instants). |
 | `Upsampler` | Image-rejecting FIR interpolating upsampler — the transmit-side mirror of `Decimator`. |
+| `FrequencyShifter` | Analytic-signal (Hilbert) SSB frequency translator — moves a *real* signal by N Hz with no mirror image, at the same rate. |
 | `SpectrumSource` | Turns an audio stream into dB-scaled waterfall lines (Hann-windowed FFT, one byte per bin). |
 | `OccupiedBandwidth` | ITU-R SM.443 occupied-bandwidth meter (Welch-averaged, Hann, 50 % overlap). |
+| `SsbDemodulator` | Single sideband from complex baseband: IQ in, real audio out. The readable reference form — holds the whole signal. |
+| `StreamingSsbDemodulator` | The same filter block-at-a-time, in constant memory and ~4× less arithmetic — what an unbounded stream or a live SDR needs. |
 
 - **Targets** `net10.0`. No third-party package dependencies — just the BCL.
 - Public API is **locked by a build-time test** and the package follows
@@ -48,6 +51,20 @@ float y = fir.Next(0.5f);
 
 // Occupied bandwidth (ITU-R SM.443), e.g. the 99 % OBW of a captured signal:
 var (lowHz, highHz, widthHz, peakHz) = OccupiedBandwidth.Measure(output, sampleRate: 12000);
+
+// SSB from an SDR's complex baseband: 48 kHz IQ in, 12 kHz USB audio out. Because you hold
+// the baseband, the receive filter is yours to choose rather than a rig's to impose.
+var ssb = new StreamingSsbDemodulator(new SsbDemodulatorOptions
+{
+    InputRate = 48000,
+    OutputRate = 12000,
+    Sideband = Sideband.Upper,
+    DialHz = 0,               // the receiver is tuned to the dial, so the carrier is at DC
+    SsbLowHz = 150, SsbHighHz = 3450,
+});
+short[] iq = new short[9600];                     // interleaved I,Q,I,Q…
+float[] audio = new float[ssb.MaxOutputFor(iq.Length / 2)];
+int wrote = ssb.Process(iq, audio);
 ```
 
 (Exact constructor/method signatures are in the XML docs shipped with the package.)
