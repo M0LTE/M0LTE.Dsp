@@ -9,10 +9,19 @@ namespace M0LTE.Dsp;
 /// post-filter is needed. Works on a signal of any bandwidth without knowing its band.
 /// </summary>
 /// <remarks>
-/// The in-phase path is delayed by the Hilbert FIR's group delay ((taps−1)/2 samples) so I and Q
+/// <para>The in-phase path is delayed by the Hilbert FIR's group delay ((taps−1)/2 samples) so I and Q
 /// stay time-aligned; the first few output samples are a settling transient. The rate is
 /// unchanged (1:1) — pair with <see cref="Decimator"/>/<see cref="Upsampler"/> to also change rate.
-/// A Type III Hilbert FIR has nulls at DC and Nyquist, so keep the signal clear of both.
+/// A Type III Hilbert FIR has nulls at DC and Nyquist, so keep the signal clear of both.</para>
+/// <para><b>Down-shifting folds the input's content below the shift onto the output</b> — and no
+/// Hilbert quality prevents it. "No mirror image" means the input's own conjugate spectrum is
+/// suppressed; but shifting down by D moves input frequency f to f − D, and for f &lt; D taking
+/// the real part lands it at D − f, on top of whatever else is there. For the wanted signal this
+/// is harmless (place it above D); for a NOISY input — off-air audio, a channel tap — the noise
+/// below D folds onto the band and costs real SNR (a measured +3 dB across a demodulator's band
+/// where the fold overlapped it, pdn-soundmodem 2026-08-06). Receive-side users must bandpass to
+/// the wanted band BEFORE down-shifting; the same applies at the top end when shifting up toward
+/// Nyquist. Transmit-side up-shifts of a clean rendered signal need nothing.</para>
 /// </remarks>
 public sealed class FrequencyShifter
 {
