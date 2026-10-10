@@ -1,5 +1,26 @@
 namespace M0LTE.Dsp
 {
+    public sealed class ComplexRationalResampler
+    {
+        public ComplexRationalResampler(M0LTE.Dsp.RationalResamplerOptions options) { }
+        public int Decimation { get; }
+        public double DelayInputSamples { get; }
+        public double DelayOutputSamples { get; }
+        public long InputCount { get; }
+        public int InputRate { get; }
+        public int Interpolation { get; }
+        public long OutputCount { get; }
+        public int OutputRate { get; }
+        public double PassbandHz { get; }
+        public double PassbandRippleDb { get; }
+        public int PrototypeTaps { get; }
+        public double StopbandAttenuationDb { get; }
+        public double StopbandHz { get; }
+        public int TapsPerPhase { get; }
+        public int MaxOutput(int inputFrames) { }
+        public int Process(System.ReadOnlySpan<float> interleaved, System.Span<float> output) { }
+        public void Reset() { }
+    }
     public sealed class Decimator
     {
         public Decimator(int inputRate, int factor, int taps = 96) { }
@@ -34,6 +55,37 @@ namespace M0LTE.Dsp
                 "WidthHz",
                 "PeakHz"})]
         public static System.ValueTuple<double, double, double, double> Measure(System.ReadOnlySpan<float> samples, int sampleRate, double fraction = 0.99, int fftSize = 4096) { }
+    }
+    public sealed class RationalResampler
+    {
+        public RationalResampler(M0LTE.Dsp.RationalResamplerOptions options) { }
+        public int Decimation { get; }
+        public double DelayInputSamples { get; }
+        public double DelayOutputSamples { get; }
+        public long InputCount { get; }
+        public int InputRate { get; }
+        public int Interpolation { get; }
+        public long OutputCount { get; }
+        public int OutputRate { get; }
+        public double PassbandHz { get; }
+        public double PassbandRippleDb { get; }
+        public int PrototypeTaps { get; }
+        public double StopbandAttenuationDb { get; }
+        public double StopbandHz { get; }
+        public int TapsPerPhase { get; }
+        public int MaxOutput(int inputLength) { }
+        public int Process(System.ReadOnlySpan<float> input, System.Span<float> output) { }
+        public void Reset() { }
+    }
+    public sealed class RationalResamplerOptions
+    {
+        public RationalResamplerOptions() { }
+        public int InputRate { get; init; }
+        public int MaxPrototypeTaps { get; init; }
+        public int OutputRate { get; init; }
+        public double? PassbandHz { get; init; }
+        public double StopbandAttenuationDb { get; init; }
+        public double? StopbandHz { get; init; }
     }
     public enum Sideband
     {

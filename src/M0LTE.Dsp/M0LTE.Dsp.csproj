@@ -3,7 +3,7 @@
   <PropertyGroup>
     <PackageId>M0LTE.Dsp</PackageId>
     <Title>M0LTE.Dsp — DSP primitives</Title>
-    <Description>Dependency-free digital-signal-processing primitives for .NET: an iterative in-place radix-2 complex FFT, windowed-sinc FIR filter design (low-pass / band-pass / root-raised-cosine), a streaming FIR filter, an anti-aliased FIR decimator and image-rejecting FIR upsampler, an analytic-signal frequency shifter, single-sideband demodulation from complex baseband (a readable whole-signal form and a constant-memory streaming one), a waterfall-spectrum source, and an ITU-R SM.443 occupied-bandwidth meter. Extracted from the pdn-soundmodem packet-radio modem; used by amateur-radio SDR/modem work but general-purpose.</Description>
+    <Description>Dependency-free digital-signal-processing primitives for .NET: an iterative in-place radix-2 complex FFT, windowed-sinc FIR filter design (low-pass / band-pass / root-raised-cosine), a streaming FIR filter, an anti-aliased FIR decimator and image-rejecting FIR upsampler, a streaming rational (L/M) polyphase resampler for real audio and IQ, an analytic-signal frequency shifter, single-sideband demodulation from complex baseband (a readable whole-signal form and a constant-memory streaming one), a waterfall-spectrum source, and an ITU-R SM.443 occupied-bandwidth meter. Extracted from the pdn-soundmodem packet-radio modem; used by amateur-radio SDR/modem work but general-purpose.</Description>
     <PackageTags>dsp;fft;fir;signal-processing;sdr;iq;ssb;demodulation;decimator;resampling;amateur-radio;ham-radio</PackageTags>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
