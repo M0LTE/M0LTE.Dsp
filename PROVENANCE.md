@@ -16,6 +16,7 @@ copyleft obligation.
 | `FirFilter.cs` | A direct-form FIR filter over a circular history — the textbook streaming MAC. |
 | `Decimator.cs` | FIR anti-aliased decimator that evaluates the FIR only at output instants (polyphase-equivalent cost). Standard construction; own implementation. |
 | `Upsampler.cs` | FIR interpolating upsampler (zero-stuff + image-reject low-pass, gain-compensated) — the transmit-side mirror of `Decimator`. Standard construction; own implementation. |
+| `RationalResampler.cs`, `ComplexRationalResampler.cs` | Textbook polyphase L/M sample-rate conversion (zero-stuff by L, low-pass, keep one in M, with only the non-zero taps evaluated at output instants), using a Kaiser-windowed sinc prototype sized by Kaiser's published length and beta formulae. Independent implementation; the pdn-soundmodem tool-only resampler was not used as a source. |
 | `FrequencyShifter.cs` | Analytic-signal (Hilbert) single-sideband frequency translator: a windowed-sinc Type III Hilbert FIR forms the analytic signal, mixed by an NCO with the real part taken. Textbook SSB up/down-conversion; independent implementation. |
 | `SpectrumSource.cs` | Hann-windowed FFT framing into dB-scaled waterfall bytes. Own implementation over `Fft`. |
 | `OccupiedBandwidth.cs` | The ITU-R SM.443 occupied-bandwidth definition (power fraction with equal tails), estimated by Welch averaging (Hann, 50 % overlap). Own implementation of a published measurement definition. |
