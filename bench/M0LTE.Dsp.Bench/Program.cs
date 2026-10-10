@@ -1,0 +1,72 @@
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using M0LTE.Dsp;
+
+// Cost per output sample of the rational resampler, for the rate pairs an SDR front end meets.
+// The headline case is a 2.048 MS/s source (an RTL dongle or an OpenWebRX profile) brought to
+// 48 kS/s: after a coarse integer decimation (/16 to 128 kS/s, or /32 to 64 kS/s) and, for
+// comparison, all in one step. Run with: dotnet run -c Release --project bench/M0LTE.Dsp.Bench
+
+(int In, int Out, string Note)[] cases =
+[
+    (128000, 48000, "2.048 MS/s after a coarse /16"),
+    (64000, 48000, "2.048 MS/s after a coarse /32"),
+    (2048000, 48000, "2.048 MS/s in one step"),
+    (250000, 48000, "2 MS/s after a coarse /8"),
+    (44100, 48000, "sound card 44.1 kHz"),
+];
+
+Console.WriteLine($"{RuntimeInformation.ProcessArchitecture}, {Environment.ProcessorCount} cores, {RuntimeInformation.FrameworkDescription}, Vector<float> x{System.Numerics.Vector<float>.Count}");
+Console.WriteLine("ns per output: real (one stream), IQ (one complex frame). One thread, best of 5.");
+Console.WriteLine("x RT: seconds of IQ converted per second of one core.");
+Console.WriteLine();
+Console.WriteLine($"{"in -> out",-18} {"L/M",-8} {"taps/ph",7} {"real ns",8} {"IQ ns",8} {"x RT",8}  note");
+
+foreach ((int inputRate, int outputRate, string note) in cases)
+{
+    var options = new RationalResamplerOptions { InputRate = inputRate, OutputRate = outputRate };
+    var real = new RationalResampler(options);
+    var complex = new ComplexRationalResampler(options);
+
+    // 20 ms blocks, as a live source would deliver them.
+    int block = inputRate / 50;
+    var input = new float[2 * block];
+    var random = new Random(1);
+    for (int n = 0; n < input.Length; n++)
+    {
+        input[n] = (float)(random.NextDouble() - 0.5);
+    }
+
+    var realOut = new float[real.MaxOutput(block)];
+    var complexOut = new float[2 * complex.MaxOutput(block)];
+
+    double realNs = Best(() => real.Process(input.AsSpan(0, block), realOut));
+    double complexNs = Best(() => complex.Process(input, complexOut));
+    double realTime = 1e9 / (complexNs * outputRate);
+    Console.WriteLine($"{inputRate + " -> " + outputRate,-18} {real.Interpolation + "/" + real.Decimation,-8} {real.TapsPerPhase,7} {realNs,8:0.0} {complexNs,8:0.0} {realTime,8:0}  {note}");
+}
+
+static double Best(Func<int> processBlock)
+{
+    // Warm up (JIT, tiering), then time 5 runs of 50 blocks and keep the fastest.
+    for (int i = 0; i < 200; i++)
+    {
+        processBlock();
+    }
+
+    double best = double.MaxValue;
+    for (int run = 0; run < 5; run++)
+    {
+        long outputs = 0;
+        var watch = Stopwatch.StartNew();
+        for (int i = 0; i < 50; i++)
+        {
+            outputs += processBlock();
+        }
+
+        watch.Stop();
+        best = Math.Min(best, watch.Elapsed.TotalNanoseconds / outputs);
+    }
+
+    return best;
+}

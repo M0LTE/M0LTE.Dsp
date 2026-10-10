@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/bench/">
+    <Project Path="bench/M0LTE.Dsp.Bench/M0LTE.Dsp.Bench.csproj" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/M0LTE.Dsp/M0LTE.Dsp.csproj" />
   </Folder>
