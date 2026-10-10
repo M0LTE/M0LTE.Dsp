@@ -325,13 +325,26 @@ internal sealed class PolyphaseBank
         {
             ReadOnlySpan<Vector<float>> va = MemoryMarshal.Cast<float, Vector<float>>(a);
             ReadOnlySpan<Vector<float>> vb = MemoryMarshal.Cast<float, Vector<float>>(b[..a.Length]);
-            var acc = Vector<float>.Zero;
-            for (int v = 0; v < va.Length; v++)
+            // Four independent accumulators, so consecutive adds do not wait on each other.
+            var acc0 = Vector<float>.Zero;
+            var acc1 = Vector<float>.Zero;
+            var acc2 = Vector<float>.Zero;
+            var acc3 = Vector<float>.Zero;
+            int v = 0;
+            for (; v + 3 < va.Length; v += 4)
             {
-                acc += va[v] * vb[v];
+                acc0 += va[v] * vb[v];
+                acc1 += va[v + 1] * vb[v + 1];
+                acc2 += va[v + 2] * vb[v + 2];
+                acc3 += va[v + 3] * vb[v + 3];
             }
 
-            result = Vector.Sum(acc);
+            for (; v < va.Length; v++)
+            {
+                acc0 += va[v] * vb[v];
+            }
+
+            result = Vector.Sum((acc0 + acc1) + (acc2 + acc3));
             i = va.Length * Vector<float>.Count;
         }
 

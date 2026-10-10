@@ -48,8 +48,12 @@ foreach ((int inputRate, int outputRate, string note) in cases)
 
 static double Best(Func<int> processBlock)
 {
-    // Warm up (JIT, tiering), then time 5 runs of 50 blocks and keep the fastest.
-    for (int i = 0; i < 200; i++)
+    // Warm up for a full second, then time 5 runs of 50 blocks and keep the fastest. A count of
+    // blocks is not enough: tiered compilation promotes the hot loop on a background thread, and
+    // on a busy machine 200 blocks finished before it had, which made the first cases measured
+    // look three times dearer than they are.
+    var warm = Stopwatch.StartNew();
+    while (warm.ElapsedMilliseconds < 1000)
     {
         processBlock();
     }
