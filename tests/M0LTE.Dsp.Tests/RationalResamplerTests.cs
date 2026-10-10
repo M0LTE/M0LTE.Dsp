@@ -88,6 +88,7 @@ public class RationalResamplerTests
     [Theory]
     [InlineData(60)]
     [InlineData(100)]
+    [InlineData(110)]
     public void The_stated_figure_follows_the_requested_attenuation(double attenuationDb)
     {
         var resampler = new RationalResampler(new RationalResamplerOptions
@@ -104,6 +105,30 @@ public class RationalResamplerTests
             resampler.Reset();
             int skip = (int)Math.Ceiling(2 * resampler.DelayOutputSamples) + 1;
             (Rms(output.AsSpan(skip)) / (0.5 / Math.Sqrt(2))).Should().BeLessThan(floor);
+        }
+    }
+
+    [Theory]
+    [InlineData(44100, 48000, 15000)]
+    [InlineData(128000, 48000, 17000)]
+    [InlineData(12000, 48000, 4500)]
+    public void The_delay_figure_places_each_output_on_the_input_time_line(int inputRate, int outputRate, int frequency)
+    {
+        // A high tone makes a timing error large: at 15 kHz on 44.1 -> 48 kHz, one prototype
+        // tap (1/160 of an input sample) is 0.013 rad, against a tolerance of 0.001.
+        var resampler = new RationalResampler(new RationalResamplerOptions { InputRate = inputRate, OutputRate = outputRate });
+        int count = inputRate / 5;
+        var input = new float[count];
+        for (int n = 0; n < count; n++)
+        {
+            input[n] = (float)Math.Cos(2 * Math.PI * ((long)frequency * n % inputRate) / inputRate);
+        }
+
+        float[] output = Run(resampler, input, count);
+        int skip = (int)Math.Ceiling(2 * resampler.DelayOutputSamples) + 1;
+        for (int m = skip; m < output.Length - skip; m++)
+        {
+            output[m].Should().BeApproximately((float)ExpectedCosine(frequency, inputRate, resampler, m), 1e-3f, "output {0}", m);
         }
     }
 
@@ -407,6 +432,18 @@ public class RationalResamplerTests
         aliasIntoPassband.Should().Throw<ArgumentException>();
         zeroRate.Should().Throw<ArgumentException>();
         hopelessRatio.Should().Throw<ArgumentException>().WithMessage("*MaxPrototypeTaps*");
+
+        // NaN fails every comparison, so a check written as "reject if out of range" lets it in.
+        Action nanPassband = () => new RationalResampler(new RationalResamplerOptions { PassbandHz = double.NaN });
+        Action nanStopband = () => new RationalResampler(new RationalResamplerOptions { StopbandHz = double.NaN });
+        Action nanAttenuation = () => new RationalResampler(new RationalResamplerOptions { StopbandAttenuationDb = double.NaN });
+        Action pastFloatFloor = () => new RationalResampler(new RationalResamplerOptions { StopbandAttenuationDb = 120 });
+        Action noTaps = () => new RationalResampler(new RationalResamplerOptions { MaxPrototypeTaps = 0 });
+        nanPassband.Should().Throw<ArgumentException>();
+        nanStopband.Should().Throw<ArgumentException>();
+        nanAttenuation.Should().Throw<ArgumentException>();
+        pastFloatFloor.Should().Throw<ArgumentException>();
+        noTaps.Should().Throw<ArgumentException>();
     }
 
     [Fact]

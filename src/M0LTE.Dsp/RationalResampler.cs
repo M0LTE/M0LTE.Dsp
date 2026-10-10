@@ -28,7 +28,8 @@ public sealed class RationalResamplerOptions
 
     /// <summary>Attenuation at and beyond <see cref="StopbandHz"/>, dB. Default 80, which is below a
     /// 12-bit converter's quantisation floor and well inside float arithmetic's reach. Each extra
-    /// 10 dB costs about 14 % more taps.</summary>
+    /// 10 dB costs about 14 % more taps. Accepted from 20 to 110 dB: beyond that the float
+    /// arithmetic, not the filter, sets the floor.</summary>
     public double StopbandAttenuationDb { get; init; } = 80;
 
     /// <summary>Refuse to design a prototype filter longer than this. Only a rate pair with a
@@ -184,14 +185,26 @@ internal sealed class PolyphaseBank
     /// attenuation keeps the measured figure on the right side of it.</summary>
     private const double DesignMarginDb = 3;
 
+    private const double MinAttenuationDb = 20;
+
+    private const double MaxAttenuationDb = 110;
+
     private readonly float[] _coefficients;
 
     public PolyphaseBank(RationalResamplerOptions options)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(options.InputRate);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(options.OutputRate);
-        ArgumentOutOfRangeException.ThrowIfLessThan(options.StopbandAttenuationDb, 20);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(options.StopbandAttenuationDb, 140);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(options.MaxPrototypeTaps);
+
+        // Float coefficients and float accumulation bottom out somewhere between 115 and 140 dB,
+        // so a figure past MaxAttenuationDb could be stated but not delivered.
+        if (!(options.StopbandAttenuationDb >= MinAttenuationDb && options.StopbandAttenuationDb <= MaxAttenuationDb))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(options),
+                $"StopbandAttenuationDb ({options.StopbandAttenuationDb}) must be from {MinAttenuationDb} to {MaxAttenuationDb} dB");
+        }
 
         InputRate = options.InputRate;
         OutputRate = options.OutputRate;
@@ -202,7 +215,8 @@ internal sealed class PolyphaseBank
         double lower = Math.Min(InputRate, OutputRate);
         PassbandHz = options.PassbandHz ?? 0.4 * lower;
         StopbandHz = options.StopbandHz ?? 0.5 * lower;
-        if (PassbandHz <= 0 || StopbandHz <= PassbandHz || StopbandHz > lower - PassbandHz)
+        // Written so that NaN, which fails every comparison, fails the check too.
+        if (!(PassbandHz > 0 && StopbandHz > PassbandHz && StopbandHz <= lower - PassbandHz))
         {
             throw new ArgumentException(
                 $"Need 0 < PassbandHz ({PassbandHz}) < StopbandHz ({StopbandHz}) <= lower rate - PassbandHz ({lower - PassbandHz})",
@@ -219,7 +233,7 @@ internal sealed class PolyphaseBank
         double design = StopbandAttenuationDb + DesignMarginDb;
         double transition = (StopbandHz - PassbandHz) / prototypeRate;
         double estimate = Math.Ceiling((design - 7.95) / (14.36 * transition)) + 1;
-        if (estimate > options.MaxPrototypeTaps)
+        if (!(estimate <= options.MaxPrototypeTaps))
         {
             throw new ArgumentException(
                 $"{InputRate} Hz to {OutputRate} Hz reduces to {Interpolation}/{Decimation} and needs a {estimate:0}-tap prototype, over MaxPrototypeTaps ({options.MaxPrototypeTaps}). Choose rates with a larger common divisor, or relax the filter.",
@@ -227,7 +241,7 @@ internal sealed class PolyphaseBank
         }
 
         TapsPerPhase = Math.Max(1, (int)Math.Ceiling(estimate / Interpolation));
-        PrototypeTaps = TapsPerPhase * Interpolation;
+        PrototypeTaps = checked(TapsPerPhase * Interpolation);
         double beta = KaiserBeta(design);
         double cutoff = 0.5 * (PassbandHz + StopbandHz) / prototypeRate;
         double centre = (PrototypeTaps - 1) / 2.0;
