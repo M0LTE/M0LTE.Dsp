@@ -114,8 +114,8 @@ public sealed class ComplexRationalResampler
             while (_need == 0)
             {
                 ReadOnlySpan<float> taps = _bank.Phase(_phase);
-                output[2 * written] = PolyphaseBank.Dot(taps, _historyI.AsSpan(_write, k));
-                output[(2 * written) + 1] = PolyphaseBank.Dot(taps, _historyQ.AsSpan(_write, k));
+                output[2 * written] = VectorMath.Dot(taps, _historyI.AsSpan(_write, k));
+                output[(2 * written) + 1] = VectorMath.Dot(taps, _historyQ.AsSpan(_write, k));
                 written++;
                 _need = _bank.Advance(ref _phase);
                 OutputCount++;

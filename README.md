@@ -16,7 +16,7 @@ here is radio-specific — it's general-purpose DSP (standard-API / textbook bui
 | `SpectrumSource` | Turns an audio stream into dB-scaled waterfall lines (Hann-windowed FFT, one byte per bin). |
 | `OccupiedBandwidth` | ITU-R SM.443 occupied-bandwidth meter (Welch-averaged, Hann, 50 % overlap). |
 | `SsbDemodulator` | Single sideband from complex baseband: IQ in, real audio out. The readable reference form — holds the whole signal. |
-| `StreamingSsbDemodulator` | The same filter block-at-a-time, in constant memory and ~4× less arithmetic — what an unbounded stream or a live SDR needs. |
+| `StreamingSsbDemodulator` | The same filter block-at-a-time, in constant memory and ~4× less arithmetic, which is what an unbounded stream or a live SDR needs. Single-precision SIMD inner loop; takes int16, float or double IQ. |
 
 - **Targets** `net10.0`. No third-party package dependencies — just the BCL.
 - Public API is **locked by a build-time test** and the package follows
@@ -78,6 +78,9 @@ var ssb = new StreamingSsbDemodulator(new SsbDemodulatorOptions
 short[] iq = new short[9600];                     // interleaved I,Q,I,Q…
 float[] audio = new float[ssb.MaxOutputFor(iq.Length / 2)];
 int wrote = ssb.Process(iq, audio);
+// Float IQ from an SDR stream goes in as it is, with no copy: interleaved I,Q, counts in frames.
+float[] iqFloat = new float[9600];
+wrote = ssb.Process(iqFloat, audio);
 ```
 
 (Exact constructor/method signatures are in the XML docs shipped with the package.)
