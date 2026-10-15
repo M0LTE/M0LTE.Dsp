@@ -48,7 +48,8 @@ foreach ((int inputRate, int outputRate, string note) in cases)
 
 // Cost per output sample of the streaming SSB demodulator, for the arrangements a receiver
 // meets: audio delivered at the IQ rate (nothing to decimate, every output a full kernel), and
-// the decimating cases the class was first written for.
+// the decimating cases the class was first written for. Three columns for its three input
+// layouts: int16 interleaved, separate double I and Q, and float interleaved.
 (int In, int Out, double Dial, string Note)[] ssbCases =
 [
     (48000, 48000, 0, "IQ rate = DSP rate, tuned to the dial"),
@@ -61,7 +62,7 @@ Console.WriteLine();
 Console.WriteLine("StreamingSsbDemodulator, ns per audio output. One thread, best of 5.");
 Console.WriteLine("x RT: seconds of IQ demodulated per second of one core.");
 Console.WriteLine();
-Console.WriteLine($"{"in -> out",-18} {"dial",6} {"int16 ns",9} {"double ns",9} {"x RT",7}  note");
+Console.WriteLine($"{"in -> out",-18} {"dial",6} {"int16 ns",9} {"double ns",9} {"float ns",9} {"x RT",7}  note");
 
 foreach ((int inputRate, int outputRate, double dial, string note) in ssbCases)
 {
@@ -86,8 +87,9 @@ foreach ((int inputRate, int outputRate, double dial, string note) in ssbCases)
     var audio = new float[demodulator.MaxOutputFor(block)];
     double shortNs = Best(() => demodulator.Process(shorts, audio));
     double doubleNs = Best(() => demodulator.Process(i, q, audio));
-    double realTime = 1e9 / (doubleNs * outputRate);
-    Console.WriteLine($"{inputRate + " -> " + outputRate,-18} {dial,6} {shortNs,9:0.0} {doubleNs,9:0.0} {realTime,7:0}  {note}");
+    double floatNs = Best(() => demodulator.Process(iq, audio));
+    double realTime = 1e9 / (floatNs * outputRate);
+    Console.WriteLine($"{inputRate + " -> " + outputRate,-18} {dial,6} {shortNs,9:0.0} {doubleNs,9:0.0} {floatNs,9:0.0} {realTime,7:0}  {note}");
 }
 
 static double Best(Func<int> processBlock)

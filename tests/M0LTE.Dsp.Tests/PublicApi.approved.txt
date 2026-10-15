@@ -128,6 +128,7 @@ namespace M0LTE.Dsp
         public int OutputRate { get; }
         public int Flush(System.Span<float> output) { }
         public int MaxOutputFor(int inputFrames) { }
+        public int Process(System.ReadOnlySpan<float> interleaved, System.Span<float> output) { }
         public int Process(System.ReadOnlySpan<short> interleaved, System.Span<float> output) { }
         public int Process(System.ReadOnlySpan<double> i, System.ReadOnlySpan<double> q, System.Span<float> output) { }
     }

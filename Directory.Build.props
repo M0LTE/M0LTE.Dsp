@@ -14,7 +14,7 @@
        (tests/M0LTE.Dsp.Tests/PublicApiTests.cs); see docs/versioning.md for the
        MAJOR/MINOR/PATCH policy that governs bumps to this Version. -->
   <PropertyGroup>
-    <Version>0.2.1</Version>
+    <Version>0.2.2</Version>
     <Authors>Tom Fanning M0LTE</Authors>
     <Company>M0LTE</Company>
     <Copyright>Copyright © 2026 Tom Fanning M0LTE</Copyright>

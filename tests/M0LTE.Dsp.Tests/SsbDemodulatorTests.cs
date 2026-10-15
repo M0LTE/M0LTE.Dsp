@@ -288,4 +288,171 @@ public class SsbDemodulatorTests
         reference.Should().Throw<ArgumentException>();
         streaming.Should().Throw<ArgumentException>();
     }
+
+    /// <summary>The same int16 IQ as normalised interleaved floats: exact, since every int16 over
+    /// 32768 is a float.</summary>
+    private static float[] ToFloat(short[] interleaved)
+    {
+        var iq = new float[interleaved.Length];
+        for (int k = 0; k < iq.Length; k++)
+        {
+            iq[k] = interleaved[k] / 32768f;
+        }
+
+        return iq;
+    }
+
+    /// <summary>Runs the float overload in blocks of the given size, then flushes.</summary>
+    private static float[] StreamFloat(float[] interleaved, SsbDemodulatorOptions options, int blockFrames)
+    {
+        var demodulator = new StreamingSsbDemodulator(options);
+        var output = new List<float>();
+        var buffer = new float[demodulator.MaxOutputFor(blockFrames) + demodulator.MaxFlushOutput];
+
+        int frames = interleaved.Length / 2;
+        for (int start = 0; start < frames; start += blockFrames)
+        {
+            int n = Math.Min(blockFrames, frames - start);
+            int wrote = demodulator.Process(interleaved.AsSpan(start * 2, n * 2), buffer);
+            output.AddRange(buffer.AsSpan(0, wrote).ToArray());
+        }
+
+        output.AddRange(buffer.AsSpan(0, demodulator.Flush(buffer)).ToArray());
+        return [.. output];
+    }
+
+    /// <summary>
+    /// The filter runs in single precision with a vector dot product. That is a change of
+    /// arithmetic, not of filter, so it is held to the double-precision reference by its worst
+    /// sample rather than its average: anywhere in the output, through the flush, on either
+    /// sideband, tuned or not, decimating or not, the difference is under 2e-6 of the signal's
+    /// peak (-114 dB, below the quantisation of 16-bit IQ). Measured on x64 it is about 3e-7, a
+    /// few float roundings; the margin is for a vector width that sums in a different order.
+    /// </summary>
+    [Theory]
+    [InlineData(Sideband.Upper, 0.0, 48000, 1)]
+    [InlineData(Sideband.Lower, 0.0, 48000, 7)]
+    [InlineData(Sideband.Upper, 1200.0, 48000, 997)]
+    [InlineData(Sideband.Lower, -900.0, 48000, 4096)]
+    [InlineData(Sideband.Upper, 0.0, 9600, 3)]
+    [InlineData(Sideband.Lower, 0.0, 12000, 1001)]
+    [InlineData(Sideband.Upper, 300.0, 9600, 4093)]
+    [InlineData(Sideband.Lower, -1500.0, 12000, 1)]
+    public void Single_precision_stays_within_two_millionths_of_peak_of_the_reference(
+        Sideband sideband, double dialHz, int outputRate, int blockFrames)
+    {
+        short[] iq = NoisyIq(24000 + 137, seed: 17);
+        var options = new SsbDemodulatorOptions
+        {
+            Sideband = sideband,
+            DialHz = dialHz,
+            OutputRate = outputRate,
+            NormalisePeak = 0f,
+        };
+
+        float[] reference = new SsbDemodulator(options).Convert(iq);
+        float[] streamed = StreamFloat(ToFloat(iq), options, blockFrames);
+
+        streamed.Length.Should().Be(reference.Length);
+        double peak = 0, worst = 0;
+        int at = -1;
+        for (int k = 0; k < reference.Length; k++)
+        {
+            peak = Math.Max(peak, Math.Abs(reference[k]));
+            double error = Math.Abs(streamed[k] - (double)reference[k]);
+            if (error > worst)
+            {
+                worst = error;
+                at = k;
+            }
+        }
+
+        (worst / peak).Should().BeLessThan(2e-6,
+            "single precision is a rounding change only (worst {0:E2} at sample {1} of {2}, peak {3:F4})",
+            worst, at, reference.Length, peak);
+    }
+
+    /// <summary>The three input layouts are three ways of handing over the same samples, so given
+    /// the same values they give the same output to the bit.</summary>
+    [Theory]
+    [InlineData(48000, 0.0)]
+    [InlineData(9600, 700.0)]
+    public void The_int16_float_and_double_overloads_agree_exactly(int outputRate, double dialHz)
+    {
+        short[] shorts = NoisyIq(10007, seed: 23);
+        float[] floats = ToFloat(shorts);
+        var i = new double[floats.Length / 2];
+        var q = new double[floats.Length / 2];
+        for (int k = 0; k < i.Length; k++)
+        {
+            i[k] = floats[2 * k];
+            q[k] = floats[(2 * k) + 1];
+        }
+
+        var options = new SsbDemodulatorOptions { OutputRate = outputRate, DialHz = dialHz, NormalisePeak = 0f };
+        float[] fromShort = Stream(shorts, options, blockFrames: 1000);
+        float[] fromFloat = StreamFloat(floats, options, blockFrames: 1000);
+
+        var demodulator = new StreamingSsbDemodulator(options);
+        var fromDouble = new float[demodulator.MaxOutputFor(i.Length) + demodulator.MaxFlushOutput];
+        int wrote = demodulator.Process(i, q, fromDouble);
+        wrote += demodulator.Flush(fromDouble.AsSpan(wrote));
+
+        fromFloat.Should().Equal(fromShort);
+        fromDouble.AsSpan(0, wrote).ToArray().Should().Equal(fromShort);
+    }
+
+    [Theory]
+    [InlineData(48000, 1)]
+    [InlineData(48000, 3)]
+    [InlineData(48000, 997)]
+    [InlineData(9600, 1)]
+    [InlineData(9600, 7)]
+    [InlineData(9600, 4099)]
+    public void Float_input_does_not_depend_on_how_it_is_blocked(int outputRate, int blockFrames)
+    {
+        float[] iq = ToFloat(NoisyIq(20011, seed: 29));
+        var options = new SsbDemodulatorOptions { OutputRate = outputRate, Sideband = Sideband.Lower, NormalisePeak = 0f };
+
+        float[] whole = StreamFloat(iq, options, blockFrames: iq.Length / 2);
+        float[] blocked = StreamFloat(iq, options, blockFrames);
+
+        blocked.Should().Equal(whole);
+    }
+
+    [Theory]
+    [InlineData(48000, 0.0)]
+    [InlineData(48000, 1500.0)]
+    [InlineData(9600, 0.0)]
+    public void Float_input_allocates_nothing_in_the_steady_state(int outputRate, double dialHz)
+    {
+        var demodulator = new StreamingSsbDemodulator(
+            new SsbDemodulatorOptions { OutputRate = outputRate, DialHz = dialHz, NormalisePeak = 0f });
+        const int blockFrames = 4800;
+        float[] input = ToFloat(NoisyIq(blockFrames, seed: 31));
+        var output = new float[demodulator.MaxOutputFor(blockFrames)];
+
+        demodulator.Process(input, output); // warm up: JIT, first-touch
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        int produced = 0;
+        for (int block = 0; block < 16; block++)
+        {
+            produced += demodulator.Process(input, output);
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        produced.Should().BeGreaterThan(0);
+        allocated.Should().Be(0);
+    }
+
+    [Fact]
+    public void Float_input_after_a_flush_is_refused()
+    {
+        var demodulator = new StreamingSsbDemodulator(new SsbDemodulatorOptions { NormalisePeak = 0f });
+        demodulator.Flush(new float[demodulator.MaxFlushOutput]);
+
+        Action process = () => demodulator.Process(new float[8], new float[demodulator.MaxOutputFor(4)]);
+
+        process.Should().Throw<InvalidOperationException>();
+    }
 }

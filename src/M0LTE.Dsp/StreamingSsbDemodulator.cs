@@ -20,8 +20,19 @@ namespace M0LTE.Dsp;
 /// filters cost taps-per-output, not taps-per-input — which is 341 complex MACs per 9600 Hz
 /// output against 301 per 48000 Hz input plus the low-pass, a little over 4× less work. Nothing
 /// is approximated: this is the same linear filter, evaluated where its result is wanted.</para>
-/// <para>The output is sample-for-sample the reference's, to within double-versus-float rounding,
-/// and a test asserts exactly that — the two implementations are not allowed to drift apart.
+/// <para><b>Single precision.</b> The kernel is designed in double and then held, with the
+/// sample history, in float, and each output is one <see cref="System.Numerics.Vector{T}"/> dot
+/// product: the history is stored as interleaved (re, im) pairs and the kernel as (Re e, -Im e),
+/// so the real part of the complex product is a plain sum of products, and every sample is
+/// written twice, one ring apart, so that any window is one contiguous run. The NCO, where there
+/// is one, still steps its phasor in double. Against the double-precision reference the worst
+/// output sample differs by about 3e-7 of the signal's peak, measured on x64 and arm64, and a
+/// test holds it under 2e-6 (-114 dB): a rounding change, below the quantisation of 16-bit IQ.
+/// Against the same loop in scalar double it is roughly 11 times faster on an x64 with AVX2 and
+/// 6 times on a Raspberry Pi 4, where audio at a 48 kS/s IQ rate now costs about 2%
+/// of a core rather than 11%.</para>
+/// <para>The output is sample-for-sample the reference's, to within that rounding, and a test
+/// asserts exactly that, so the two implementations are not allowed to drift apart.
 /// <see cref="SsbDemodulatorOptions.NormalisePeak"/> is deliberately <em>not</em> honoured here:
 /// peak-normalising needs the whole signal in hand, and on a stream that means scaling everything
 /// to whichever burst happened to be loudest so far, which silently moves the level under
@@ -30,15 +41,15 @@ namespace M0LTE.Dsp;
 public sealed class StreamingSsbDemodulator
 {
     private readonly int _factor;
-    private readonly double[] _kre;   // composite kernel = SSB bandpass * anti-alias low-pass
-    private readonly double[] _kim;
-    private readonly int _len;
-    private readonly double[] _ringRe;
-    private readonly double[] _ringIm;
+    private readonly float[] _kernel; // composite kernel, interleaved (Re e[p], -Im e[p])
+    private readonly int _len;        // kernel length in complex taps
+    private readonly float[] _ring;   // interleaved (re, im) history, written twice over: see PushRaw
+    private readonly int _size;       // ring length in frames, a power of two
     private readonly int _mask;
+    private readonly bool _tuned;     // DialHz != 0: the NCO has work to do
     private readonly double _wr;      // NCO step phasor
     private readonly double _wi;
-    private readonly double _mirror;  // −1 on LSB: conjugate the shifted baseband
+    private readonly float _mirror;   // -1 on LSB: conjugate the shifted baseband
     private readonly int _pad;
 
     private double _pr = 1.0;
@@ -64,9 +75,10 @@ public sealed class StreamingSsbDemodulator
         _factor = opt.InputRate / opt.OutputRate;
 
         double dPhi = -2.0 * Math.PI * opt.DialHz / opt.InputRate;
+        _tuned = opt.DialHz != 0;
         _wr = Math.Cos(dPhi);
         _wi = Math.Sin(dPhi);
-        _mirror = opt.Sideband == Sideband.Lower ? -1.0 : 1.0;
+        _mirror = opt.Sideband == Sideband.Lower ? -1f : 1f;
 
         // The SSB bandpass, exactly as the reference builds it — including the sign of the
         // imaginary half, which selects the UPPER sideband only because the convolution below
@@ -115,10 +127,11 @@ public sealed class StreamingSsbDemodulator
         // Composite kernel: e[p] = sum_s g[gt-1-s] * h[p-s]. Cascading the two filters and taking
         // the real part at the end is the same operation as the reference's filter → real → filter,
         // because g is real; the reversal is what lines the group delays up. The reference applies
-        // g causally and does not compensate its delay, so neither does this.
+        // g causally and does not compensate its delay, so neither does this. It is designed in
+        // double and stored in float, interleaved to match the history and with the imaginary
+        // half negated, so that Re{e x} = Re e Re x - Im e Im x is one plain dot product.
         _len = taps + gt - 1;
-        _kre = new double[_len];
-        _kim = new double[_len];
+        _kernel = new float[2 * _len];
         for (int p = 0; p < _len; p++)
         {
             double re = 0, im = 0;
@@ -132,8 +145,8 @@ public sealed class StreamingSsbDemodulator
                     im += gc * him[hi];
                 }
             }
-            _kre[p] = re;
-            _kim[p] = im;
+            _kernel[2 * p] = (float)re;
+            _kernel[(2 * p) + 1] = (float)-im;
         }
 
         // Output instant k draws on input samples k − _pad … k + LookAheadSamples. Shifting every
@@ -149,8 +162,8 @@ public sealed class StreamingSsbDemodulator
             size <<= 1;
         }
 
-        _ringRe = new double[size];
-        _ringIm = new double[size];
+        _size = size;
+        _ring = new float[2 * 2 * size];
         _mask = size - 1;
         _fed = _pad;
     }
@@ -183,14 +196,36 @@ public sealed class StreamingSsbDemodulator
         int written = 0;
         for (int k = 0; k < n; k++)
         {
-            Push(interleaved[2 * k] / 32768.0, interleaved[2 * k + 1] / 32768.0);
+            Push(interleaved[2 * k] / 32768f, interleaved[(2 * k) + 1] / 32768f);
             Emit(output, ref written);
         }
 
         return written;
     }
 
-    /// <summary>Converts a block of separate I/Q samples (normalised, ~[−1,1]).</summary>
+    /// <summary>
+    /// Converts a block of interleaved single-precision IQ (I,Q,I,Q..., normalised to about -1..1), the
+    /// layout an SDR stream or <see cref="ComplexRationalResampler"/> delivers. Counts are frames:
+    /// <paramref name="interleaved"/> holds twice as many floats, and an odd trailing one is
+    /// ignored. Returns the number of audio samples written to <paramref name="output"/>.
+    /// </summary>
+    /// <remarks>The samples go into the filter as they are, with no conversion or copy, so this is
+    /// the overload to use when the IQ is already float.</remarks>
+    public int Process(ReadOnlySpan<float> interleaved, Span<float> output)
+    {
+        int n = interleaved.Length / 2;
+        int written = 0;
+        for (int k = 0; k < n; k++)
+        {
+            Push(interleaved[2 * k], interleaved[(2 * k) + 1]);
+            Emit(output, ref written);
+        }
+
+        return written;
+    }
+
+    /// <summary>Converts a block of separate I/Q samples (normalised, about -1..1). The filter runs in
+    /// single precision, so each sample is rounded to float on the way in.</summary>
     public int Process(ReadOnlySpan<double> i, ReadOnlySpan<double> q, Span<float> output)
     {
         if (i.Length != q.Length)
@@ -201,7 +236,7 @@ public sealed class StreamingSsbDemodulator
         int written = 0;
         for (int k = 0; k < i.Length; k++)
         {
-            Push(i[k], q[k]);
+            Push((float)i[k], (float)q[k]);
             Emit(output, ref written);
         }
 
@@ -233,16 +268,25 @@ public sealed class StreamingSsbDemodulator
         return written;
     }
 
-    private void Push(double i, double q)
+    private void Push(float i, float q)
     {
         if (_flushed)
         {
             throw new InvalidOperationException("Process cannot follow Flush");
         }
 
-        // NCO: shift by −DialHz so the suppressed carrier sits at 0 Hz. Incremental phasor,
-        // renormalised on the same schedule as the reference so the two do not diverge. On LSB
-        // the result is conjugated, mirroring the spectrum about the dial so that the wanted
+        _realFed++;
+        if (!_tuned)
+        {
+            // Tuned to the dial, the NCO's phasor stays at exactly 1 + 0j, so its product is the
+            // sample itself: skip the arithmetic, keep only the LSB mirror.
+            PushRaw(i, _mirror * q);
+            return;
+        }
+
+        // NCO: shift by -DialHz so the suppressed carrier sits at 0 Hz. Incremental phasor in
+        // double, renormalised on the same schedule as the reference so the two do not diverge. On
+        // LSB the result is conjugated, mirroring the spectrum about the dial so that the wanted
         // lower sideband becomes an upper one and the single USB kernel below serves both.
         double re = (i * _pr) - (q * _pi);
         double im = _mirror * ((i * _pi) + (q * _pr));
@@ -257,15 +301,20 @@ public sealed class StreamingSsbDemodulator
         }
 
         _ncoIndex++;
-        _realFed++;
-        PushRaw(re, im);
+        PushRaw((float)re, (float)im);
     }
 
-    private void PushRaw(double re, double im)
+    /// <summary>Writes one frame at its ring slot and again one ring further on, so that every
+    /// window of <c>_len</c> frames starting inside the first ring is one contiguous run of floats
+    /// for the vector dot product, wherever the ring has wrapped.</summary>
+    private void PushRaw(float re, float im)
     {
-        int slot = (int)(_fed & _mask);
-        _ringRe[slot] = re;
-        _ringIm[slot] = im;
+        int slot = 2 * (int)(_fed & _mask);
+        int copy = slot + (2 * _size);
+        _ring[slot] = re;
+        _ring[slot + 1] = im;
+        _ring[copy] = re;
+        _ring[copy + 1] = im;
         _fed++;
     }
 
@@ -283,20 +332,8 @@ public sealed class StreamingSsbDemodulator
                 return;
             }
 
-            int s0 = (int)(start & _mask);
-            int run = Math.Min(_len, _ringRe.Length - s0);
-            double acc = 0;
-            for (int p = 0; p < run; p++)
-            {
-                acc += (_kre[p] * _ringRe[s0 + p]) - (_kim[p] * _ringIm[s0 + p]);
-            }
-
-            for (int p = run; p < _len; p++)
-            {
-                acc += (_kre[p] * _ringRe[p - run]) - (_kim[p] * _ringIm[p - run]);
-            }
-
-            output[written++] = (float)acc;
+            int s0 = 2 * (int)(start & _mask);
+            output[written++] = VectorMath.Dot(_kernel, _ring.AsSpan(s0, 2 * _len));
             _produced++;
         }
     }
